@@ -1,0 +1,25 @@
+{
+ "lmc_score": 0.49242160693499526,
+ "lmc_score_image": 0.5246949874261075,
+ "per_organelle_study_macro": {
+  "Actin": 0.4901,
+  "Mitochondria": 0.4308,
+  "Nucleus": 0.5116,
+  "Tubulin": 0.5371
+ },
+ "per_organelle_image_mean": {
+  "Actin": 0.5026,
+  "Mitochondria": 0.4308,
+  "Nucleus": 0.6282,
+  "Tubulin": 0.5371
+ },
+ "n_images": {
+  "Actin": 14,
+  "Mitochondria": 8,
+  "Nucleus": 37,
+  "Tubulin": 23
+ },
+ "checkpoint": "runs\\baseline_v1\\best.pt",
+ "epoch": 43,
+ "model": "U-Net (base 32, scratch)"
+}

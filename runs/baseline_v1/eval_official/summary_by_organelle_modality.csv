@@ -1,0 +1,8 @@
+organelle,tl,off_ssim,off_pcc,ssim,pcc
+Actin,BF,0.353,0.569,0.483,0.569
+Actin,PC,0.444,0.594,0.626,0.594
+Mitochondria,BF,0.363,0.498,0.406,0.498
+Nucleus,BF,0.309,0.173,0.198,0.173
+Nucleus,DIC,0.804,0.634,0.821,0.634
+Nucleus,PC,0.65,0.501,0.667,0.501
+Tubulin,DIC,0.295,0.78,0.337,0.78
