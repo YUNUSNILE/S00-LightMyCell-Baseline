@@ -1,0 +1,4 @@
+run,params_M,best_epoch,LMC (study macro),LMC (image mean),LMC w/o S20,Nucleus,Mitochondria,Tubulin,Actin,last-epoch LMC,s/step,val pass (s),total time,peak GPU GB
+E1g smp_convnext_tiny,31.95,25,0.5782,0.5395,0.6525,0.6607,0.4799,0.5535,0.6189,0.5588,0.73,148,1h35m,2.96
+E1b smp_resnet34,24.48,35,0.5328,0.4897,0.6208,0.5782,0.4601,0.5261,0.5669,0.5306,0.86,98,1h33m,2.11
+E1h unet,7.77,50,0.5138,0.4741,0.5938,0.5632,0.4242,0.4918,0.5759,0.5138,0.68,153,1h35m,2.19

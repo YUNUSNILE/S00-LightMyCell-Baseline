@@ -1,0 +1,52 @@
+run:
+  id: E1b
+  name: smpr34-k16
+  notes: ''
+data:
+  cache_root: cache/k16
+  train_cache_root: C:/lmc_cache/k16
+  split: splits/split_v1.json
+  input: stack
+  k: 16
+  overfit_samples: null
+  in_channels: 16
+model:
+  backbone: smp_resnet34
+  base: 32
+  depth: 4
+  encoder_weights: imagenet
+train:
+  epochs: 50
+  samples_per_epoch: null
+  batch: 2
+  accum: 4
+  patch: 512
+  lr: 0.001
+  wd: 0.0001
+  pct_start: 0.05
+  clip: 1.0
+  seed: 0
+  sampler: sqrt
+  augment: true
+  workers: 3
+  log_every: 10
+  val_every_epochs: 5
+loss:
+  w_l1: 1.0
+  w_ssim: 0.5
+  w_pcc: 0.5
+eval:
+  tile: 512
+  overlap: 128
+  batch: 2
+  limit: null
+provenance:
+  config_hash: c8c50b548c64
+  split_sha256: 50f72e7418677c6414ae1ebb9287899a919c1ca109e957a931291c3249798d33
+  code_sha256: d4bd8dde5c0b
+  created: '2026-11-21T13:17:29'
+  command: train.py --config configs/E1b_smp_resnet34.yaml
+  python: 3.12.3
+  torch: 2.7.1+cu118
+  gpu: GeForce GTX 1650
+  smoke: false

@@ -1,0 +1,546 @@
+{
+ "lmc_score": 0.5137907939464569,
+ "lmc_score_image": 0.47409075672310713,
+ "per_organelle_study_macro": {
+  "Actin": 0.5759,
+  "Mitochondria": 0.4242,
+  "Nucleus": 0.5632,
+  "Tubulin": 0.4918
+ },
+ "per_organelle_image_mean": {
+  "Actin": 0.6076,
+  "Mitochondria": 0.3895,
+  "Nucleus": 0.4649,
+  "Tubulin": 0.4343
+ },
+ "n_images": {
+  "Actin": 30,
+  "Mitochondria": 38,
+  "Nucleus": 58,
+  "Tubulin": 53
+ },
+ "breakdown": {
+  "by_organelle": [
+   {
+    "organelle": "Actin",
+    "ssim": 0.611,
+    "pcc": 0.6042,
+    "score": 0.6076,
+    "n": 30
+   },
+   {
+    "organelle": "Mitochondria",
+    "ssim": 0.4648,
+    "pcc": 0.3142,
+    "score": 0.3895,
+    "n": 38
+   },
+   {
+    "organelle": "Nucleus",
+    "ssim": 0.5734,
+    "pcc": 0.3565,
+    "score": 0.4649,
+    "n": 58
+   },
+   {
+    "organelle": "Tubulin",
+    "ssim": 0.4415,
+    "pcc": 0.4271,
+    "score": 0.4343,
+    "n": 53
+   }
+  ],
+  "by_organelle_modality": [
+   {
+    "organelle": "Actin",
+    "tl": "BF",
+    "ssim": 0.6737,
+    "pcc": 0.6066,
+    "score": 0.6402,
+    "n": 10
+   },
+   {
+    "organelle": "Actin",
+    "tl": "PC",
+    "ssim": 0.5796,
+    "pcc": 0.6029,
+    "score": 0.5913,
+    "n": 20
+   },
+   {
+    "organelle": "Mitochondria",
+    "tl": "DIC",
+    "ssim": 0.3981,
+    "pcc": 0.1208,
+    "score": 0.2594,
+    "n": 23
+   },
+   {
+    "organelle": "Mitochondria",
+    "tl": "PC",
+    "ssim": 0.5671,
+    "pcc": 0.6109,
+    "score": 0.589,
+    "n": 15
+   },
+   {
+    "organelle": "Nucleus",
+    "tl": "BF",
+    "ssim": 0.8142,
+    "pcc": 0.595,
+    "score": 0.7046,
+    "n": 10
+   },
+   {
+    "organelle": "Nucleus",
+    "tl": "DIC",
+    "ssim": 0.3693,
+    "pcc": 0.1868,
+    "score": 0.2781,
+    "n": 28
+   },
+   {
+    "organelle": "Nucleus",
+    "tl": "PC",
+    "ssim": 0.7387,
+    "pcc": 0.4747,
+    "score": 0.6067,
+    "n": 20
+   },
+   {
+    "organelle": "Tubulin",
+    "tl": "BF",
+    "ssim": 0.4131,
+    "pcc": 0.7261,
+    "score": 0.5696,
+    "n": 10
+   },
+   {
+    "organelle": "Tubulin",
+    "tl": "DIC",
+    "ssim": 0.4648,
+    "pcc": 0.2295,
+    "score": 0.3471,
+    "n": 28
+   },
+   {
+    "organelle": "Tubulin",
+    "tl": "PC",
+    "ssim": 0.4171,
+    "pcc": 0.5967,
+    "score": 0.5069,
+    "n": 15
+   }
+  ],
+  "by_organelle_modality_study": [
+   {
+    "organelle": "Actin",
+    "tl": "BF",
+    "study": 82,
+    "ssim": 0.6737,
+    "pcc": 0.6066,
+    "score": 0.6402,
+    "n": 10
+   },
+   {
+    "organelle": "Actin",
+    "tl": "PC",
+    "study": 72,
+    "ssim": 0.6259,
+    "pcc": 0.6517,
+    "score": 0.6388,
+    "n": 15
+   },
+   {
+    "organelle": "Actin",
+    "tl": "PC",
+    "study": 81,
+    "ssim": 0.4406,
+    "pcc": 0.4567,
+    "score": 0.4487,
+    "n": 5
+   },
+   {
+    "organelle": "Mitochondria",
+    "tl": "DIC",
+    "study": 20,
+    "ssim": 0.3981,
+    "pcc": 0.1208,
+    "score": 0.2594,
+    "n": 23
+   },
+   {
+    "organelle": "Mitochondria",
+    "tl": "PC",
+    "study": 72,
+    "ssim": 0.5671,
+    "pcc": 0.6109,
+    "score": 0.589,
+    "n": 15
+   },
+   {
+    "organelle": "Nucleus",
+    "tl": "BF",
+    "study": 82,
+    "ssim": 0.8142,
+    "pcc": 0.595,
+    "score": 0.7046,
+    "n": 10
+   },
+   {
+    "organelle": "Nucleus",
+    "tl": "DIC",
+    "study": 20,
+    "ssim": 0.2994,
+    "pcc": 0.1176,
+    "score": 0.2085,
+    "n": 23
+   },
+   {
+    "organelle": "Nucleus",
+    "tl": "DIC",
+    "study": 86,
+    "ssim": 0.6911,
+    "pcc": 0.5052,
+    "score": 0.5981,
+    "n": 5
+   },
+   {
+    "organelle": "Nucleus",
+    "tl": "PC",
+    "study": 72,
+    "ssim": 0.7474,
+    "pcc": 0.3746,
+    "score": 0.561,
+    "n": 15
+   },
+   {
+    "organelle": "Nucleus",
+    "tl": "PC",
+    "study": 81,
+    "ssim": 0.7127,
+    "pcc": 0.775,
+    "score": 0.7438,
+    "n": 5
+   },
+   {
+    "organelle": "Tubulin",
+    "tl": "BF",
+    "study": 82,
+    "ssim": 0.4131,
+    "pcc": 0.7261,
+    "score": 0.5696,
+    "n": 10
+   },
+   {
+    "organelle": "Tubulin",
+    "tl": "DIC",
+    "study": 20,
+    "ssim": 0.4058,
+    "pcc": 0.1793,
+    "score": 0.2925,
+    "n": 23
+   },
+   {
+    "organelle": "Tubulin",
+    "tl": "DIC",
+    "study": 86,
+    "ssim": 0.7363,
+    "pcc": 0.4603,
+    "score": 0.5983,
+    "n": 5
+   },
+   {
+    "organelle": "Tubulin",
+    "tl": "PC",
+    "study": 72,
+    "ssim": 0.4171,
+    "pcc": 0.5967,
+    "score": 0.5069,
+    "n": 15
+   }
+  ]
+ },
+ "lmc_score_excl": 0.5937704194223339,
+ "excluded_studies": [
+  20
+ ],
+ "task": "best",
+ "tasks": {
+  "mip": {
+   "lmc_score": 0.540539142631483,
+   "lmc_score_image": 0.5094511450508734,
+   "per_organelle_study_macro": {
+    "Actin": 0.5906,
+    "Mitochondria": 0.4493,
+    "Nucleus": 0.5995,
+    "Tubulin": 0.5228
+   },
+   "per_organelle_image_mean": {
+    "Actin": 0.6135,
+    "Mitochondria": 0.4129,
+    "Nucleus": 0.5348,
+    "Tubulin": 0.4766
+   },
+   "n_images": {
+    "Actin": 30,
+    "Mitochondria": 38,
+    "Nucleus": 58,
+    "Tubulin": 53
+   },
+   "breakdown": {
+    "by_organelle": [
+     {
+      "organelle": "Actin",
+      "ssim": 0.6072,
+      "pcc": 0.6198,
+      "score": 0.6135,
+      "n": 30
+     },
+     {
+      "organelle": "Mitochondria",
+      "ssim": 0.4829,
+      "pcc": 0.3429,
+      "score": 0.4129,
+      "n": 38
+     },
+     {
+      "organelle": "Nucleus",
+      "ssim": 0.6166,
+      "pcc": 0.453,
+      "score": 0.5348,
+      "n": 58
+     },
+     {
+      "organelle": "Tubulin",
+      "ssim": 0.5079,
+      "pcc": 0.4452,
+      "score": 0.4766,
+      "n": 53
+     }
+    ],
+    "by_organelle_modality": [
+     {
+      "organelle": "Actin",
+      "tl": "BF",
+      "ssim": 0.6638,
+      "pcc": 0.6201,
+      "score": 0.6419,
+      "n": 10
+     },
+     {
+      "organelle": "Actin",
+      "tl": "PC",
+      "ssim": 0.5789,
+      "pcc": 0.6196,
+      "score": 0.5993,
+      "n": 20
+     },
+     {
+      "organelle": "Mitochondria",
+      "tl": "DIC",
+      "ssim": 0.4088,
+      "pcc": 0.1443,
+      "score": 0.2765,
+      "n": 23
+     },
+     {
+      "organelle": "Mitochondria",
+      "tl": "PC",
+      "ssim": 0.5966,
+      "pcc": 0.6475,
+      "score": 0.6221,
+      "n": 15
+     },
+     {
+      "organelle": "Nucleus",
+      "tl": "BF",
+      "ssim": 0.8217,
+      "pcc": 0.66,
+      "score": 0.7409,
+      "n": 10
+     },
+     {
+      "organelle": "Nucleus",
+      "tl": "DIC",
+      "ssim": 0.5061,
+      "pcc": 0.3298,
+      "score": 0.4179,
+      "n": 28
+     },
+     {
+      "organelle": "Nucleus",
+      "tl": "PC",
+      "ssim": 0.6688,
+      "pcc": 0.5221,
+      "score": 0.5954,
+      "n": 20
+     },
+     {
+      "organelle": "Tubulin",
+      "tl": "BF",
+      "ssim": 0.4183,
+      "pcc": 0.7365,
+      "score": 0.5774,
+      "n": 10
+     },
+     {
+      "organelle": "Tubulin",
+      "tl": "DIC",
+      "ssim": 0.5401,
+      "pcc": 0.2504,
+      "score": 0.3952,
+      "n": 28
+     },
+     {
+      "organelle": "Tubulin",
+      "tl": "PC",
+      "ssim": 0.5077,
+      "pcc": 0.6145,
+      "score": 0.5611,
+      "n": 15
+     }
+    ],
+    "by_organelle_modality_study": [
+     {
+      "organelle": "Actin",
+      "tl": "BF",
+      "study": 82,
+      "ssim": 0.6638,
+      "pcc": 0.6201,
+      "score": 0.6419,
+      "n": 10
+     },
+     {
+      "organelle": "Actin",
+      "tl": "PC",
+      "study": 72,
+      "ssim": 0.6036,
+      "pcc": 0.6636,
+      "score": 0.6336,
+      "n": 15
+     },
+     {
+      "organelle": "Actin",
+      "tl": "PC",
+      "study": 81,
+      "ssim": 0.5048,
+      "pcc": 0.4878,
+      "score": 0.4963,
+      "n": 5
+     },
+     {
+      "organelle": "Mitochondria",
+      "tl": "DIC",
+      "study": 20,
+      "ssim": 0.4088,
+      "pcc": 0.1443,
+      "score": 0.2765,
+      "n": 23
+     },
+     {
+      "organelle": "Mitochondria",
+      "tl": "PC",
+      "study": 72,
+      "ssim": 0.5966,
+      "pcc": 0.6475,
+      "score": 0.6221,
+      "n": 15
+     },
+     {
+      "organelle": "Nucleus",
+      "tl": "BF",
+      "study": 82,
+      "ssim": 0.8217,
+      "pcc": 0.66,
+      "score": 0.7409,
+      "n": 10
+     },
+     {
+      "organelle": "Nucleus",
+      "tl": "DIC",
+      "study": 20,
+      "ssim": 0.4714,
+      "pcc": 0.2929,
+      "score": 0.3822,
+      "n": 23
+     },
+     {
+      "organelle": "Nucleus",
+      "tl": "DIC",
+      "study": 86,
+      "ssim": 0.6657,
+      "pcc": 0.4993,
+      "score": 0.5825,
+      "n": 5
+     },
+     {
+      "organelle": "Nucleus",
+      "tl": "PC",
+      "study": 72,
+      "ssim": 0.6619,
+      "pcc": 0.428,
+      "score": 0.5449,
+      "n": 15
+     },
+     {
+      "organelle": "Nucleus",
+      "tl": "PC",
+      "study": 81,
+      "ssim": 0.6895,
+      "pcc": 0.8044,
+      "score": 0.7469,
+      "n": 5
+     },
+     {
+      "organelle": "Tubulin",
+      "tl": "BF",
+      "study": 82,
+      "ssim": 0.4183,
+      "pcc": 0.7365,
+      "score": 0.5774,
+      "n": 10
+     },
+     {
+      "organelle": "Tubulin",
+      "tl": "DIC",
+      "study": 20,
+      "ssim": 0.5009,
+      "pcc": 0.1995,
+      "score": 0.3502,
+      "n": 23
+     },
+     {
+      "organelle": "Tubulin",
+      "tl": "DIC",
+      "study": 86,
+      "ssim": 0.7203,
+      "pcc": 0.4843,
+      "score": 0.6023,
+      "n": 5
+     },
+     {
+      "organelle": "Tubulin",
+      "tl": "PC",
+      "study": 72,
+      "ssim": 0.5077,
+      "pcc": 0.6145,
+      "score": 0.5611,
+      "n": 15
+     }
+    ]
+   },
+   "lmc_score_excl": 0.6116914751219145,
+   "excluded_studies": [
+    20
+   ]
+  }
+ },
+ "seconds": 146.8,
+ "n_samples": 58,
+ "selection_score": 0.5271649682889699,
+ "step": 5000,
+ "epoch": 50,
+ "split": "val",
+ "run": "E1h_unet-k16-best+mip-ema_20261127-1959"
+}

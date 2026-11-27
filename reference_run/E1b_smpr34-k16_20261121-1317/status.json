@@ -1,0 +1,12 @@
+{
+ "status": "done",
+ "step": 5000,
+ "epoch": 50,
+ "epochs": 50,
+ "steps_per_epoch": 100,
+ "total_steps": 5000,
+ "best_step": 3500,
+ "best_epoch": 35,
+ "best_val_lmc": 0.5328401260270461,
+ "updated": "2026-11-21T14:50:32"
+}

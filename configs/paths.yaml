@@ -1,0 +1,21 @@
+# Every machine-specific location used by the code lives in THIS file (read by lmc/__init__.py).
+# Relative paths are resolved against the package root (the folder holding train.py).
+# Absolute paths work too (forward slashes are fine on Windows).
+#
+# S00 v2 / S01 v2 (this machine: RTX 3050 laptop, all drives SSD; same data and cache as S01_v2):
+#   - the TSV folder on this machine is Dataset/meta/study_info/... (the package default named a V3 folder
+#     that does not exist here; the TSVs reproduce the teammate's Val label counts exactly)
+#   - the cache is on E: (SSD), so no separate SSD mirror of the train studies is needed
+
+# Raw data: the folder that contains Study_02 ... Study_86.
+dataset_root: E:/DeepLearningCompetition/Dataset
+# Folder with Study_XX_all_files.tsv and Study_XX_best_focus.tsv.
+meta_dir: E:/DeepLearningCompetition/Dataset/meta/study_info/Study_info_filenames_and_optimal focus
+
+# Cache written by tools/build_cache.py (K = 16 resampled planes, ~35 GB). Val (and the locked Test) are read here.
+cache_root: E:/DeepLearningCompetition/cache/k16
+# Optional copy of the TRAIN studies on a faster disk; null = read training patches from cache_root.
+train_cache_root: null
+
+# Run folders, REGISTRY.csv and runs/_smoke/ are created here (relative to S00_v2/).
+runs_root: runs

@@ -1,0 +1,44 @@
+﻿--- metrics
+[PASS] metric: identical images -> SSIM 1, PCC 1
+[PASS] metric: invariant to affine rescaling of the prediction  -- 1.000000/1.000000
+[PASS] metric: random prediction -> PCC ~ 0, low SSIM  -- SSIM 0.009 PCC 0.001
+[PASS] metric: MAE/Euclid/cosine only for Nucleus & Mitochondria
+[PASS] LMC-score: study-macro then organelle mean  -- 0.5750 / 0.5333
+--- resample
+[PASS] resample: K=16 from nZ=4 is exact linear interpolation, ends included
+[PASS] resample: K=16 from nZ=9 is exact linear interpolation, ends included
+[PASS] resample: K=16 from nZ=16 is exact linear interpolation, ends included
+[PASS] resample: K=16 from nZ=21 is exact linear interpolation, ends included
+[PASS] resample: K=16 from nZ=37 is exact linear interpolation, ends included
+--- cache
+[PASS] cache: every usable (image, TL) of the TSVs is in the index  -- 932 rows, 924 images, 28 studies; missing []
+[PASS] cache: 28 studies  -- [np.int64(2), np.int64(3), np.int64(4), np.int64(5), np.int64(6), np.int64(7), np.int64(20), np.int64(21), np.int64(25), np.int64(42), np.int64(51), np.int64(56), np.int64(57), np.int64(58), np.int64(62), np.int64(64), np.int64(72), np.int64(73), np.int64(76), np.int64(77), np.int64(78), np.int64(79), np.int64(80), np.int64(81), np.int64(82), np.int64(83), np.int64(84), np.int64(86)]
+[PASS] cache: S03 duplicate Nucleus/Actin labels dropped
+[PASS] cache: resampled best_z within [0, K-1]  -- min 0.00 max 15.00
+[PASS] cache: lo < hi for every TL stack and label
+[PASS] cache: shapes/dtypes and GT-vs-mask consistent (25 random rows)  -- []
+--- split
+[PASS] split: studies disjoint and = 28
+[PASS] split: samples cover the cache index exactly  -- {'train': 803, 'val': 58, 'test': 71}
+[PASS] split: train samples only from train studies
+[PASS] split: val samples only from val studies
+[PASS] split: test samples only from test studies
+--- oracle
+[PASS] no-oracle: TL best_z not referenced by data/model/train/eval code  -- []
+--- loader
+[PASS] sampler: sqrt study weights  -- S25 share 34.3%, smallest study 2.3%
+    batch shapes x (2, 16, 512, 512) y (2, 4, 512, 512) m (2, 4)
+[PASS] loader: finite tensors, masks match targets
+[PASS] loader: throughput (3 workers, 512^2 x 16 planes)  -- 10.3 patches/s after warm-up (12.3s first batch); training needs ~8 patches/s (2 per 0.25 s micro-step)
+--- models
+[PASS] model unet ['best']: (1,16,512,512)->(1, 4, 512, 512); full image 700x1100 -> (4, 700, 1100)  -- 7.77M params
+[PASS] model smp_resnet34 ['best']: (1,16,512,512)->(1, 4, 512, 512); full image 700x1100 -> (4, 700, 1100)  -- 24.48M params
+[PASS] model runet ['best']: (1,16,512,512)->(1, 4, 512, 512); full image 700x1100 -> (4, 700, 1100)  -- 31.01M params
+[PASS] model smp_convnext_tiny ['best']: (1,16,512,512)->(1, 4, 512, 512); full image 700x1100 -> (4, 700, 1100)  -- 31.95M params
+[PASS] model smp_convnext_tiny ['best', 'mip']: (1,16,512,512)->(1, 8, 512, 512); full image 700x1100 -> (8, 700, 1100)  -- 31.95M params
+--- mip
+[PASS] mip: one row per cached image  -- 924 rows, 924 images
+[PASS] mip: a MIP label exactly where a best-focus label exists  -- {'Nucleus': 911, 'Mitochondria': 803, 'Tubulin': 176, 'Actin': 139}
+[PASS] mip: shapes, dtype, MIP >= best-focus plane (20 random rows)  -- []
+
+33/33 checks passed

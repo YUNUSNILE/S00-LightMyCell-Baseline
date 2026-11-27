@@ -1,0 +1,41 @@
+# Shared protocol (PLAN.md section 4). Experiment files inherit this and change ONE thing.
+run:
+  id: base
+  name: base
+  notes: ""
+# Data locations (dataset, cache, SSD train cache, runs) are NOT here: they are in configs/paths.yaml.
+data:
+  split: splits/split_v1.json    # fixed for the whole project (part of the package, not machine-specific)
+  input: stack                   # stack = K resampled TL planes as channels; center = stack-centre plane (E2)
+  k: 16
+  overfit_samples: null          # E0 only: list of [study, image_id, tl]
+model:
+  backbone: unet                 # unet | smp_resnet34 | runet
+  base: 32                       # unet width
+  depth: 4
+  encoder_weights: imagenet      # smp_resnet34 only
+train:
+  epochs: 50                     # 1 epoch = samples_per_epoch patches from the study-balanced sampler
+  samples_per_epoch: null        # null = number of training samples (803) -> 803 // 8 = 100 steps/epoch
+  batch: 2                       # micro-batch (patches on the GPU at once)
+  accum: 4                       # effective batch = batch x accum = 8
+  patch: 512
+  lr: 1.0e-3
+  wd: 1.0e-4
+  pct_start: 0.05                # OneCycle warm-up fraction
+  clip: 1.0
+  seed: 0
+  sampler: sqrt                  # study weight proportional to sqrt(n_samples)
+  augment: true                  # 8 dihedral flips/rotations
+  workers: 3
+  log_every: 10
+  val_every_epochs: 5            # full-image Val LMC-score every 5 epochs (500 steps) and at the end
+loss:
+  w_l1: 1.0
+  w_ssim: 0.5
+  w_pcc: 0.5
+eval:
+  tile: 512
+  overlap: 128
+  batch: 2
+  limit: null                    # null = whole Val split
