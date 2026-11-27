@@ -1,0 +1,15 @@
+# E1h (S00 v2): the S00 control network (plain 2D U-Net, depth 4, base 32, BatchNorm, random init; the same class as
+# github.com/YUNUSNILE/S00-LightMyCell-Baseline lmc/model.py, = the teammate's E1a network) trained with the final
+# S01 v2 recipe (E1g), so that E1g vs E1h changes ONE axis: the backbone (pretrained ConvNeXt-T U-Net -> plain U-Net).
+#   - Task 1 + Task 2 heads: 8 output channels, 0-3 = organelle best-focus planes, 4-7 = their MIPs (tools/build_mip_cache.py)
+#   - EMA of the weights (decay 0.999, BatchNorm statistics averaged too), best.pt = EMA weights at the best
+#     mean(Task 1, Task 2) Val LMC-score
+#   - bf16 autocast, micro-batch 4 x accum 2 (effective 8), cuDNN autotuning off, 5 loader workers (as E1g)
+#   - no encoder lr multiplier: the plain U-Net has no pretrained encoder (one AdamW group, lr 1e-3)
+# Everything else (data, split_v1, K=16 TL stack input, loss, 50 epochs x 100 steps, OneCycle, seed 0) = base.yaml.
+# E1a (teammate, GTX 1650) is the same network with the base protocol (fp32, batch 2 x 4, Task 1 only, no EMA).
+inherit: base.yaml
+run: {id: E1h, name: unet-k16-best+mip-ema}
+model: {backbone: unet, base: 32, depth: 4}
+data: {tasks: [best, mip]}
+train: {batch: 4, accum: 2, precision: bf16, cudnn_benchmark: false, workers: 5, ema_decay: 0.999, select_on: mean}

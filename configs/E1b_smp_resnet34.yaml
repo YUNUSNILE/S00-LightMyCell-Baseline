@@ -1,0 +1,4 @@
+# E1b: U-Net with ImageNet-pretrained ResNet-34 encoder (smp), first conv adapted to 16 channels.
+inherit: base.yaml
+run: {id: E1b, name: smpr34-k16}
+model: {backbone: smp_resnet34, encoder_weights: imagenet}

@@ -1,0 +1,14 @@
+﻿E1h_unet-k16-best+mip-ema_20261127-1959: best.pt (step 5000), val: 58 samples
+LMC-score 0.5138 (image-mean 0.4741)  per organelle {'Actin': 0.5759, 'Mitochondria': 0.4242, 'Nucleus': 0.5632, 'Tubulin': 0.4918}  n={'Actin': 30, 'Mitochondria': 38, 'Nucleus': 58, 'Tubulin': 53}  146s
+  Actin        BF   SSIM 0.674  PCC 0.607  n=10
+  Actin        PC   SSIM 0.580  PCC 0.603  n=20
+  Mitochondria DIC  SSIM 0.398  PCC 0.121  n=23
+  Mitochondria PC   SSIM 0.567  PCC 0.611  n=15
+  Nucleus      BF   SSIM 0.814  PCC 0.595  n=10
+  Nucleus      DIC  SSIM 0.369  PCC 0.187  n=28
+  Nucleus      PC   SSIM 0.739  PCC 0.475  n=20
+  Tubulin      BF   SSIM 0.413  PCC 0.726  n=10
+  Tubulin      DIC  SSIM 0.465  PCC 0.230  n=28
+  Tubulin      PC   SSIM 0.417  PCC 0.597  n=15
+[mip] LMC-score 0.5405 (without S20 0.6117)  per organelle {'Actin': 0.5906, 'Mitochondria': 0.4493, 'Nucleus': 0.5995, 'Tubulin': 0.5228}  n={'Actin': 30, 'Mitochondria': 38, 'Nucleus': 58, 'Tubulin': 53}
+-> E:\DeepLearningCompetition\S00_v2\runs\E1h_unet-k16-best+mip-ema_20261127-1959\eval_val_best.json

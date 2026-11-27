@@ -1,279 +1,488 @@
-"""Train the baseline U-Net (TL image -> 4 organelles) with a masked loss.
+"""Train a model: TL stack (K planes) -> 4 organelle best-focus planes (PLAN.md sections 4, 7).
 
-Writes to --out: log.csv (one row per epoch), curves.png, best.pt, last.pt,
-config.json and split.json.
+New run:      python train.py --config configs/E1a_unet.yaml
+Resume:       python train.py --resume runs/<run_dir>          (works mid-epoch)
+Paths:        dataset / cache / SSD train cache / runs folder are set in configs/paths.yaml
+Overrides:    --set train.epochs=2 --set eval.limit=3   (recorded in config.yaml, change the config hash)
+Smoke test:   --smoke  (output to runs/_smoke/, never in the registry)   --stop-at N  (stop after step N)
 
-Examples:
-  # smoke test on one study (image-level split, numbers are not meaningful)
-  python train.py --val-frac 0.2 --epochs 2 --samples-per-epoch 64 --out runs/smoke
-  # baseline with held-out studies
-  python train.py --val-studies 3,6,21 --epochs 40 --out runs/baseline
-  # S01: U-Net with an ImageNet-pretrained ResNet-34 encoder, encoder lr = 0.1 x lr
-  python train.py --arch smp-unet --encoder resnet34 --encoder-weights imagenet \\
-      --enc-lr-mult 0.1 --val-studies 3,6,21 --out runs/S01/r34-imagenet
+Epochs: one epoch = train.samples_per_epoch patches (null = number of training samples, 803) drawn by
+the study-balanced sampler, i.e. steps_per_epoch = samples_per_epoch // (batch x accum) optimizer steps
+(803 // 8 = 100). Total steps = epochs x steps_per_epoch; OneCycle runs over the total.
+Validation (official full-image LMC-score on Val) every train.val_every_epochs epochs and at the end;
+best.pt = best Val LMC-score. last.pt is written at the end of every epoch (and on Ctrl+C).
+Each epoch's patch draws come from a generator seeded by (seed, epoch), so a resumed run replays
+exactly the remaining draws of the interrupted epoch.
+
+Console: a tqdm bar per epoch (console only); every printed line is mirrored to stdout.log.
+The non-finite guards and grad accumulation follow baseline_teammate/train.py
+(github.com/YUNUSNILE/S00-LightMyCell-Baseline, commit fc2ab9a).
 """
 import argparse
 import csv
 import json
 import math
+import sys
 import time
+from collections import deque
 from pathlib import Path
 
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import numpy as np
-import torch
-from torch.utils.data import DataLoader, WeightedRandomSampler
+import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
+import torch  # noqa: E402
+import yaml  # noqa: E402
+from torch.utils.data import DataLoader, Sampler  # noqa: E402
+from tqdm import tqdm  # noqa: E402
 
-from lmc import ORGANELLES
-from lmc.data import LMCPatches, load_index, split_index, study_balanced_weights
-from lmc.losses import masked_loss
-from lmc.model import build_model, count_params, model_name, param_groups
+from lmc import CACHE_ROOT, ORGANELLES, PROJECT_ROOT, TRAIN_CACHE_ROOT  # noqa: E402
+from lmc import runs  # noqa: E402
+from lmc.data import PatchDataset, load_index, load_split, split_rows, study_weights  # noqa: E402
+from lmc.evaluation import evaluate_rows  # noqa: E402
+from lmc.losses import focus_kl, masked_loss  # noqa: E402
+from lmc.models import build_model, count_params, param_groups, task_list  # noqa: E402
+
+TRAIN_FIELDS = ["epoch", "step", "lr", "loss", "l1", "ssim", "pcc", "focus", "sec_per_step", "data_wait_frac", "gpu_peak_gb",
+                "skipped"]
+VAL_FIELDS = (["epoch", "step", "lmc_score", "lmc_score_image", "lmc_score_excl"]
+              + [f"att_err_planes_{o}" for o in ORGANELLES] + [f"att_err_um_{o}" for o in ORGANELLES]
+              + [f"{m}_{o}" for o in ORGANELLES for m in ("ssim", "pcc", "score")]
+              # S01 v2: Task 2 (MIP head) and the Task 2 baseline (Task 1 head scored against the MIP)
+              + ["lmc_score_mip", "lmc_score_mip_excl", "lmc_score_mip_from_best"]
+              + [f"score_mip_{o}" for o in ORGANELLES]
+              + ["n_samples", "seconds", "is_best", "best_lmc", "best_epoch"])
 
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--data", default="data/processed")
-    p.add_argument("--train-studies", default="", help="default: every study not used for validation")
-    p.add_argument("--val-studies", default="")
-    p.add_argument("--val-frac", type=float, default=0.0, help="image-level split, smoke tests only")
-    p.add_argument("--target", choices=["best", "mip"], default="best")
-    p.add_argument("--patch", type=int, default=512)
-    p.add_argument("--batch", type=int, default=4, help="micro-batch size (what goes through the GPU at once)")
-    p.add_argument("--accum", type=int, default=1,
-                   help="gradient accumulation: one optimizer step per N micro-batches (effective batch = batch x N)")
-    p.add_argument("--epochs", type=int, default=40)
-    p.add_argument("--samples-per-epoch", type=int, default=800)
-    p.add_argument("--val-crops", type=int, default=4)
-    p.add_argument("--lr", type=float, default=1e-3)
-    p.add_argument("--wd", type=float, default=1e-4)
-    p.add_argument("--arch", choices=["unet", "smp-unet", "smp-unetpp"], default="unet",
-                   help="unet = plain U-Net from scratch (S00); smp-unet / smp-unetpp = pretrained encoder (S01)")
-    p.add_argument("--base", type=int, default=32, help="plain U-Net width (--arch unet)")
-    p.add_argument("--encoder", default="resnet34",
-                   help="S01 encoder: smp name (resnet34, efficientnet-b3) or timm via tu- (tu-convnext_tiny)")
-    p.add_argument("--encoder-weights", default="imagenet", help="S01: 'imagenet' or 'none' (random init)")
-    p.add_argument("--enc-lr-mult", type=float, default=0.1, help="S01: encoder lr = lr x this")
-    p.add_argument("--freeze-epochs", type=int, default=0, help="S01: keep the encoder frozen for N epochs")
-    p.add_argument("--freeze-bn", action="store_true", help="S01: keep encoder BatchNorm statistics fixed")
-    p.add_argument("--w-l1", type=float, default=1.0)
-    p.add_argument("--w-ssim", type=float, default=0.5)
-    p.add_argument("--w-pcc", type=float, default=0.5)
-    p.add_argument("--balance", choices=["study", "none"], default="study")
-    p.add_argument("--focus-aug", action="store_true", help="random TL plane near best focus")
-    p.add_argument("--workers", type=int, default=2)
-    p.add_argument("--precision", choices=["bf16", "fp16", "fp32"], default="bf16",
-                   help="bf16 has the fp32 range; fp16 overflowed (inf BatchNorm stats) in our first run")
-    p.add_argument("--clip", type=float, default=1.0, help="gradient-norm clipping, 0 = off")
-    p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--out", default="runs/baseline")
+    p.add_argument("--config")
+    p.add_argument("--set", action="append", default=[], help="override, e.g. train.epochs=2")
+    p.add_argument("--resume", help="run folder to resume (uses its config.yaml and last.pt)")
+    p.add_argument("--smoke", action="store_true", help="write to runs/_smoke/ (never registered)")
+    p.add_argument("--stop-at", type=int, default=0, help="stop after this optimizer step as if interrupted")
+    p.add_argument("--allow-duplicate", action="store_true")
     return p.parse_args()
 
 
-def ids(s):
-    return [int(v) for v in s.split(",") if v.strip()]
+def hms(sec):
+    sec = int(max(sec, 0))
+    h, r = divmod(sec, 3600)
+    m, s = divmod(r, 60)
+    return f"{h}h{m:02d}m" if h else f"{m}m{s:02d}s"
 
 
-def autocast(device, amp_dtype):
-    """Mixed-precision context; amp_dtype None means plain fp32."""
-    return torch.autocast(device.type, dtype=amp_dtype or torch.bfloat16, enabled=amp_dtype is not None)
+def append_csv(path, fields, row):
+    new = not path.exists()
+    with open(path, "a", newline="") as fh:
+        w = csv.DictWriter(fh, fields, extrasaction="ignore")
+        if new:
+            w.writeheader()
+        w.writerow(row)
 
 
-def bn_stats_finite(model):
-    return all(torch.isfinite(b).all() for n, b in model.named_buffers() if "running" in n)
+class EpochSampler(Sampler):
+    """Study-balanced draws, epoch after epoch. Epoch e uses a generator seeded by (seed, e), so the
+    draws of any epoch are reproducible; `skip` drops the draws already consumed (mid-epoch resume)."""
+
+    def __init__(self, weights, per_epoch, first_epoch, last_epoch, seed, skip=0):
+        self.w = torch.as_tensor(weights, dtype=torch.double)
+        self.per_epoch, self.first, self.last, self.seed, self.skip = per_epoch, first_epoch, last_epoch, seed, skip
+
+    def __len__(self):
+        return (self.last - self.first + 1) * self.per_epoch - self.skip
+
+    def __iter__(self):
+        for e in range(self.first, self.last + 1):
+            g = torch.Generator().manual_seed(self.seed * 100_003 + e)
+            idx = torch.multinomial(self.w, self.per_epoch, replacement=True, generator=g).tolist()
+            yield from (idx[self.skip:] if e == self.first else idx)
 
 
-@torch.no_grad()
-def validate(model, loader, device, amp_dtype, w):
-    model.eval()
-    n_org = len(ORGANELLES)
-    s_sum, p_sum, cnt = np.zeros(n_org), np.zeros(n_org), np.zeros(n_org)
-    loss_sum, n_batches = 0.0, 0
-    for b in loader:
-        x, y, m = b["x"].to(device), b["y"].to(device), b["m"].to(device)
-        with autocast(device, amp_dtype):
-            pred = model(x)
-        loss, _, ssim, pcc = masked_loss(pred, y, m, *w)
-        loss_sum += float(loss)
-        n_batches += 1
-        m_np = m.cpu().numpy()
-        s_sum += (ssim.cpu().numpy() * m_np).sum(0)
-        p_sum += (pcc.cpu().numpy() * m_np).sum(0)
-        cnt += m_np.sum(0)
-    with np.errstate(invalid="ignore", divide="ignore"):
-        ssim_org = np.where(cnt > 0, s_sum / cnt, np.nan)
-        pcc_org = np.where(cnt > 0, p_sum / cnt, np.nan)
-    return loss_sum / max(n_batches, 1), ssim_org, pcc_org
-
-
-def plot_curves(log_path, out_png):
-    with open(log_path) as fh:
-        rows = list(csv.DictReader(fh))
-    if not rows:
+def plot_curves(run_dir, steps_per_epoch):
+    tl, vl = run_dir / "train_log.csv", run_dir / "val_log.csv"
+    if not tl.exists():
         return
-    ep = [int(r["epoch"]) for r in rows]
-    fig, ax = plt.subplots(1, 3, figsize=(15, 4))
-    ax[0].plot(ep, [float(r["train_loss"]) for r in rows], label="train")
-    ax[0].plot(ep, [float(r["val_loss"]) for r in rows], label="val")
-    ax[0].set_title("Masked loss")
-    for k, metric in enumerate(("ssim", "pcc"), start=1):
-        for org in ORGANELLES:
-            v = [float(r[f"val_{metric}_{org}"]) for r in rows]
-            if not all(math.isnan(t) for t in v):
-                ax[k].plot(ep, v, label=org)
-        ax[k].set_title(f"Validation {metric.upper()} per organelle")
+    import pandas as pd
+
+    t = pd.read_csv(tl)
+    ep = t.step / steps_per_epoch
+    fig, ax = plt.subplots(1, 3, figsize=(16, 4.2))
+    ax[0].plot(ep, t.loss, alpha=0.35, label="train loss (per log interval)")
+    ax[0].plot(ep, t.loss.rolling(10, min_periods=1).mean(), label="train loss (smoothed)")
+    ax[0].set_title("Training loss (masked L1 + 0.5(1-SSIM) + 0.5(1-PCC))")
+    if vl.exists():
+        v = pd.read_csv(vl)
+        ax[1].plot(v.epoch, v.lmc_score, "o-", label="Val LMC-score (study macro)")
+        ax[1].plot(v.epoch, v.lmc_score_image, "s--", alpha=0.6, label="Val LMC-score (image mean)")
+        for col, lab in (("lmc_score_mip", "Task 2 (MIP head) LMC-score"),
+                         ("lmc_score_mip_from_best", "Task 2 baseline (Task 1 head vs MIP)")):
+            if col in v and v[col].notna().any():
+                ax[1].plot(v.epoch, v[col], "^-", label=lab)
+        ax[1].set_title("Validation LMC-score (official metric, full images)")
+        for o in ORGANELLES:
+            if v[f"score_{o}"].notna().any():
+                ax[2].plot(v.epoch, v[f"score_{o}"], "o-", label=o)
+        ax[2].set_title("Validation (SSIM+PCC)/2 per organelle")
     for a in ax:
         a.set_xlabel("epoch")
         a.grid(alpha=0.3)
-        a.legend()
+        a.legend(fontsize=8)
     fig.tight_layout()
-    fig.savefig(out_png, dpi=120)
+    fig.savefig(run_dir / "curves.png", dpi=110)
     plt.close(fig)
+
+
+def print_val_table(epoch, epochs, step, summ, best, best_epoch, updated):
+    by = {b["organelle"]: b for b in summ["breakdown"]["by_organelle"]}
+    print(f"\n--- validation after epoch {epoch}/{epochs} (step {step}) -- {summ['n_samples']} images, "
+          f"{hms(summ['seconds'])} ---")
+    att = summ.get("attention", {})
+    head = f"  {'organelle':<13}{'SSIM':>7}{'PCC':>8}{'(S+P)/2':>9}{'macro':>8}{'n':>5}"
+    print(head + ("   attn-peak err (planes / um, <=1 plane)" if att else ""))
+    for o in ORGANELLES:
+        if o in by:
+            b = by[o]
+            a = att.get(o)
+            print(f"  {o:<13}{b['ssim']:>7.3f}{b['pcc']:>8.3f}{b['score']:>9.3f}"
+                  f"{summ['per_organelle_study_macro'][o]:>8.3f}{b['n']:>5d}"
+                  + (f"   {a['err_planes']:.2f} / {a['err_um']:.2f}, {100 * a['within_1_plane']:.0f}%" if a else ""))
+    print(f"  LMC-score {summ['lmc_score']:.4f} (image-mean {summ['lmc_score_image']:.4f}; "
+          f"without S{'/S'.join(str(x) for x in summ.get('excluded_studies', []))} {summ.get('lmc_score_excl', float('nan')):.4f})   "
+          f"best {best:.4f} @ epoch {best_epoch}   best.pt {'UPDATED' if updated else 'unchanged'}", flush=True)
+    for name, s in summ.get("tasks", {}).items():
+        po = "  ".join(f"{o[:4]} {s['per_organelle_study_macro'].get(o, float('nan')):.3f}" for o in ORGANELLES)
+        print(f"  [{name}] LMC-score {s['lmc_score']:.4f} (without S20 {s['lmc_score_excl']:.4f})   {po}", flush=True)
+    print(flush=True)
 
 
 def main():
     args = parse_args()
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
+    if bool(args.config) == bool(args.resume):
+        raise SystemExit("give exactly one of --config or --resume")
+
+    if args.resume:
+        run_dir = Path(args.resume)
+        run_dir = run_dir if run_dir.is_absolute() else PROJECT_ROOT / run_dir
+        cfg = yaml.safe_load((run_dir / "config.yaml").read_text())
+        if args.set:
+            raise SystemExit("--set is not allowed with --resume (the config of a run is frozen)")
+        if runs.read_status(run_dir).get("status") == "done":
+            raise SystemExit(f"{run_dir} is already done; nothing to resume")
+        if cfg["provenance"]["code_sha256"] != runs.code_sha256():
+            print(f"WARNING: code changed since this run started ({cfg['provenance']['code_sha256']} -> "
+                  f"{runs.code_sha256()}); the original code is in {run_dir / 'code'}")
+    else:
+        cfg = runs.resolve(runs.apply_overrides(runs.load_config(args.config), args.set))
+        if not args.smoke:
+            runs.check_not_done(cfg, args.allow_duplicate)
+        run_dir = runs.new_run_dir(cfg, smoke=args.smoke)
+        cfg["provenance"] = runs.provenance(cfg, sys.argv)
+        cfg["provenance"]["smoke"] = bool(args.smoke)
+        runs.save_config(run_dir, cfg)
+        runs.snapshot_code(run_dir)
+    runs.tee_output(run_dir)
+    t_start = time.time()
+
+    d, t, ev, lw = cfg["data"], cfg["train"], cfg["eval"], cfg["loss"]
+    tasks = task_list(cfg)  # S01 v2: ['best'] (default), ['best', 'mip'] or ['mip']
+    seed = int(t["seed"])
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    # S01 v2: configurable (default True as before). The RTX 3050 laptop hit its GPU/driver fault (TDR, "illegal
+    # memory access") with autotuned kernels at step ~170 of the first E1d smoke test; S01 v1 ran ConvNeXt-T at
+    # batch 4 x 2 for 5000 steps cleanly with the default (non-autotuned) cuDNN algorithms.
+    torch.backends.cudnn.benchmark = bool(t.get("cudnn_benchmark", True))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    amp_dtype = None
-    if device.type == "cuda" and args.precision != "fp32":
-        amp_dtype = torch.float16 if args.precision == "fp16" else torch.bfloat16
-        if amp_dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
-            print("bf16 not supported on this GPU, falling back to fp32")
-            amp_dtype = None
+    cache_root = CACHE_ROOT  # configs/paths.yaml
 
-    df = load_index(args.data)
-    train_df, val_df = split_index(df, ids(args.val_studies), args.val_frac, args.seed)
-    if args.train_studies:
-        train_df = train_df[train_df.study.isin(ids(args.train_studies))].reset_index(drop=True)
-    if args.target == "mip":
-        has = [f"has_mip_{o}" for o in ORGANELLES]
-        train_df = train_df[train_df[has].sum(1) > 0].reset_index(drop=True)
-        val_df = val_df[val_df[has].sum(1) > 0].reset_index(drop=True)
-    if len(train_df) == 0 or len(val_df) == 0:
-        raise SystemExit("empty train or val split, check --val-studies / --train-studies")
+    # ---- data
+    index = load_index(cache_root)
+    split = load_split(PROJECT_ROOT / d["split"])
+    if cfg["provenance"]["split_sha256"] != runs.file_sha256(PROJECT_ROOT / d["split"]):
+        raise SystemExit("split file changed since the run started: refusing")
+    if d.get("overfit_samples"):  # E0 overfit check: train and validate on the same few images
+        keys = {tuple(s) for s in d["overfit_samples"]}
+        train_df = index[[(s, i, tl) in keys for s, i, tl in zip(index.study, index.image_id, index.tl)]]
+        train_df = train_df.reset_index(drop=True)
+        val_df = train_df.copy()
+    else:
+        train_df, val_df = split_rows(index, split, "train"), split_rows(index, split, "val")
+    if ev.get("limit"):
+        val_df = val_df.groupby("study").head(1).head(int(ev["limit"])).reset_index(drop=True)
+    train_root = TRAIN_CACHE_ROOT  # configs/paths.yaml (SSD mirror, or cache_root when null)
+    missing = [r for r in train_df.dir.unique() if not (train_root / r / "meta.json").exists()]
+    if missing:
+        raise SystemExit(f"train cache {train_root} lacks {len(missing)} images (e.g. {missing[0]}); "
+                         "run tools/mirror_cache.py or set train_cache_root: null in configs/paths.yaml")
 
-    split = {"train_studies": sorted(train_df.study.unique().tolist()),
-             "val_studies": sorted(val_df.study.unique().tolist()),
-             "val_images": val_df[["study", "image_id"]].drop_duplicates().values.tolist(),
-             "image_level_split": not args.val_studies}
-    (out / "split.json").write_text(json.dumps(split, indent=1))
-    (out / "config.json").write_text(json.dumps(vars(args), indent=1))
-    print(f"train: {len(train_df)} samples from studies {split['train_studies']}")
-    print(f"val:   {len(val_df)} samples from studies {split['val_studies']}"
-          + ("  [image-level split: smoke test only]" if split["image_level_split"] else ""))
+    per_step = t["batch"] * t["accum"]
+    samples_per_epoch = int(t.get("samples_per_epoch") or len(train_df))
+    spe = samples_per_epoch // per_step
+    if spe < 1:
+        raise SystemExit(f"samples_per_epoch {samples_per_epoch} < batch x accum {per_step}")
+    epochs, val_every = int(t["epochs"]), int(t["val_every_epochs"])
+    total = epochs * spe
 
-    train_ds = LMCPatches(train_df, args.data, args.patch, train=True, target=args.target, focus_aug=args.focus_aug)
-    val_ds = LMCPatches(val_df, args.data, args.patch, train=False, target=args.target, val_crops=args.val_crops)
-    weights = study_balanced_weights(train_df) if args.balance == "study" else np.ones(len(train_df))
-    sampler = WeightedRandomSampler(torch.as_tensor(weights, dtype=torch.double), args.samples_per_epoch, replacement=True)
-    kw = dict(num_workers=args.workers, pin_memory=device.type == "cuda", persistent_workers=args.workers > 0)
-    train_dl = DataLoader(train_ds, args.batch, sampler=sampler, drop_last=True, **kw)
-    val_dl = DataLoader(val_ds, args.batch, shuffle=False, **kw)
+    # ---- model / optimiser
+    model = build_model(cfg).to(device)
+    # S01 v2: encoder lr multiplier (default 1.0 = one group, as before) and bf16 autocast (default fp32)
+    enc_mult = float(t.get("enc_lr_mult", 1.0))
+    groups = param_groups(model, t["lr"], enc_mult)
+    opt = torch.optim.AdamW(groups, lr=t["lr"], weight_decay=t["wd"])
+    max_lr = [g["lr"] for g in groups] if len(groups) > 1 else t["lr"]
+    sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=max_lr, total_steps=total, pct_start=t["pct_start"])
+    precision = t.get("precision", "fp32")
+    use_bf16 = precision == "bf16" and device.type == "cuda"
+    if use_bf16 and not torch.cuda.is_bf16_supported():
+        raise SystemExit("train.precision=bf16 but this GPU does not support bf16")
+    bn_bufs = [b for n_, b in model.named_buffers() if "running" in n_]
+    sync_steps = bool(t.get("sync_steps", False)) and device.type == "cuda"
+    # S01 v2: exponential moving average of the weights (Polyak averaging), used for validation and saved as best.pt.
+    # E1e's Val score moved by +-0.02-0.04 between checkpoints; an average over ~1/(1-decay) steps smooths that.
+    ema_decay = float(t.get("ema_decay", 0.0))
+    ema = None
+    if ema_decay > 0:
+        from torch.optim.swa_utils import AveragedModel, get_ema_multi_avg_fn
 
-    # free VRAM before the model: above this, Windows (WDDM) spills into shared system memory,
-    # which is slow and was associated with GPU faults in the S01 screen (docs/05_experiment_log.md)
-    vram_free = torch.cuda.mem_get_info()[0] if device.type == "cuda" else None
-    model = build_model(vars(args)).to(device)
-    print(f"{model_name(vars(args))}: {count_params(model) / 1e6:.1f}M parameters, device {device}, "
-          f"precision {str(amp_dtype).replace('torch.', '') if amp_dtype else 'fp32'}")
-    groups = param_groups(model, args.lr, args.enc_lr_mult)
-    opt = torch.optim.AdamW(groups, lr=args.lr, weight_decay=args.wd)
-    steps_per_epoch = len(train_dl) // args.accum
-    if steps_per_epoch == 0:
-        raise SystemExit("--accum is larger than the number of batches per epoch")
-    sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=[g["lr"] for g in groups],
-                                                total_steps=args.epochs * steps_per_epoch, pct_start=0.05)
-    encoder = getattr(model, "encoder", None)
-    scaler = torch.amp.GradScaler(device.type, enabled=amp_dtype == torch.float16)
-    w = (args.w_l1, args.w_ssim, args.w_pcc)
-    bn_bufs = [b for n, b in model.named_buffers() if "running" in n]
-    spill_warned = False
+        ema = AveragedModel(model, multi_avg_fn=get_ema_multi_avg_fn(ema_decay), use_buffers=True)
+    # checkpoint selection: 'task1' (default) = Task 1 LMC-score; 'mean' = mean of the Task 1 and Task 2 LMC-scores
+    select_on = t.get("select_on", "task1")
+    if select_on not in ("task1", "mean"):
+        raise SystemExit(f"train.select_on must be task1 or mean, got {select_on!r}")
 
-    log_path = out / "log.csv"
-    fields = ["epoch", "lr", "train_loss", "train_l1", "train_ssim", "train_pcc", "val_loss"]
-    fields += [f"val_{m}_{o}" for m in ("ssim", "pcc") for o in ORGANELLES] + ["val_score", "skipped_batches", "seconds"]
-    with open(log_path, "w", newline="") as fh:
-        csv.writer(fh).writerow(fields)
+    step, best, best_step, best_epoch = 0, -math.inf, 0, 0
+    if args.resume:
+        ck = torch.load(run_dir / "last.pt", map_location="cpu", weights_only=False)
+        model.load_state_dict(ck["model"])
+        opt.load_state_dict(ck["opt"])
+        sched.load_state_dict(ck["sched"])
+        if ema is not None:
+            ema.load_state_dict(ck["ema"])
+        step, best, best_step, best_epoch = ck["step"], ck["best"], ck["best_step"], ck.get("best_epoch", 0)
+        torch.set_rng_state(ck["rng_cpu"])
 
-    best = -math.inf
-    for epoch in range(1, args.epochs + 1):
-        if encoder is not None and args.freeze_epochs:
-            for prm in encoder.parameters():
-                prm.requires_grad_(epoch > args.freeze_epochs)
+    bar = "=" * 78
+    print(f"\n{bar}\n{'RESUME' if args.resume else 'START'}  {runs.rel(run_dir)}   "
+          f"({time.strftime('%Y-%m-%d %H:%M:%S')})\n{bar}")
+    print(f"  backbone      {cfg['model']['backbone']} ({count_params(model) / 1e6:.2f}M params), "
+          f"{'bf16 autocast' if use_bf16 else 'fp32'}, {device}"
+          + (f", encoder lr x{enc_mult:g}" if len(groups) > 1 else ""))
+    if getattr(model, "n_depthwise_hooked", 0):
+        print(f"  depthwise     {model.n_depthwise_hooked} depthwise convs get NCHW inputs (bf16 GPU workaround)")
+    print(f"  input         {d['input']}, K={d['in_channels']} channel(s)")
+    print(f"  data          train {len(train_df)} samples / {train_df.study.nunique()} studies, "
+          f"val {len(val_df)} samples / {val_df.study.nunique()} studies")
+    print(f"  epochs        {epochs} x {spe} steps/epoch = {total} steps "
+          f"({samples_per_epoch} samples/epoch, batch {t['batch']} x accum {t['accum']}, patch {t['patch']})")
+    print(f"  optimiser     AdamW lr {t['lr']:g} wd {t['wd']:g}, OneCycle over {total} steps, clip {t['clip']}")
+    print(f"  validation    every {val_every} epochs ({val_every * spe} steps) + at the end; best.pt on Val LMC-score")
+    if args.resume:
+        bs = f"best {best:.4f} @ epoch {best_epoch}" if best > -math.inf else "no validation yet"
+        print(f"  resumed at    step {step} (epoch {step // spe + 1}, step {step % spe} of it); {bs}")
+    print(bar, flush=True)
+    runs.write_status(run_dir, status="running", step=step, epoch=step // spe, epochs=epochs, steps_per_epoch=spe,
+                      total_steps=total, best_step=best_step, best_epoch=best_epoch,
+                      best_val_lmc=None if best == -math.inf else best)
+
+    w = study_weights(train_df, t["sampler"])
+    first_epoch = step // spe + 1
+    sampler = EpochSampler(w, spe * per_step, first_epoch, epochs, seed, skip=(step % spe) * per_step)
+    ds = PatchDataset(train_df, train_root, d["input"], d["k"], t["patch"], t["augment"], t.get("zaug"), tasks)
+    if "mip" in tasks and "has_mip_Nucleus" not in train_df:
+        raise SystemExit("data.tasks has 'mip' but the cache has no mip_index.csv: run tools/build_mip_cache.py")
+    lam = float((lw.get("focus") or {}).get("weight", 0.0))
+    sigma = float((lw.get("focus") or {}).get("sigma", 1.0))
+    if lam > 0 and not getattr(model, "has_attention", False):
+        raise SystemExit("loss.focus.weight > 0 needs a model with learned z-attention (model.zattn.mode: softmax)")
+    loader = DataLoader(ds, t["batch"], sampler=sampler, drop_last=True, num_workers=t["workers"],
+                        pin_memory=True, persistent_workers=t["workers"] > 0)
+    it = iter(loader)
+
+    def save_ckpt(name):
+        ck = {"model": model.state_dict(), "opt": opt.state_dict(), "sched": sched.state_dict(), "step": step,
+              "best": best, "best_step": best_step, "best_epoch": best_epoch,
+              "rng_cpu": torch.get_rng_state(), "config": cfg}
+        if ema is not None:  # last.pt keeps the raw weights + EMA state (resume); best.pt holds the EMA weights
+            ck["ema"] = ema.state_dict()
+            if name == "best.pt":
+                ck["raw_model"], ck["model"] = ck["model"], ema.module.state_dict()
+        torch.save(ck, run_dir / name)
+
+    val_secs = [2.4 * len(val_df)]  # prior guess until the first validation is measured
+
+    def validate(epoch):
+        nonlocal best, best_step, best_epoch
+        res, summ = evaluate_rows(ema.module if ema is not None else model, val_df, cache_root, d["input"], d["k"], device, ev["tile"], ev["overlap"],
+                                  ev["batch"], tasks=tasks, t2_baseline=bool(ev.get("t2_baseline", False)),
+                                  tta=bool(ev.get("tta", False)))
         model.train()
-        t0 = time.time()
-        tot = {"loss": 0.0, "l1": 0.0, "ssim": 0.0, "pcc": 0.0}
-        skipped, n_ok, bad = 0, 0, False  # skipped = optimizer steps not taken (non-finite loss or gradient)
-        opt.zero_grad(set_to_none=True)
-        for i, b in enumerate(train_dl):
-            if i >= steps_per_epoch * args.accum:  # leftover micro-batches that cannot fill a step
-                break
-            x, y, m = b["x"].to(device, non_blocking=True), b["y"].to(device, non_blocking=True), b["m"].to(device)
-            bn_backup = [t.clone() for t in bn_bufs]
-            with autocast(device, amp_dtype):
-                pred = model(x)
-            loss, parts, _, _ = masked_loss(pred, y, m, *w)
-            if torch.isfinite(loss):
-                scaler.scale(loss / args.accum).backward()
-                n_ok += 1
-                tot["loss"] += loss.item()
-                for k, v in parts.items():
-                    tot[k] += v
-            else:  # a non-finite forward also polluted the BatchNorm running statistics: undo that
-                bad = True
-                for t, s in zip(bn_bufs, bn_backup):
-                    t.copy_(s)
-            if (i + 1) % args.accum:
-                continue
-            if not bad:
-                scaler.unscale_(opt)
-                gnorm = torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip if args.clip > 0 else math.inf)
-                # never apply a non-finite gradient: clipping turns it into NaN for every weight
-                # (fp16: the GradScaler skips such steps itself and lowers its scale)
-                bad = not scaler.is_enabled() and not torch.isfinite(gnorm)
-            if bad:
-                skipped += 1
-            else:
-                scaler.step(opt)
-                scaler.update()
-            sched.step()
-            opt.zero_grad(set_to_none=True)
-            bad = False
-        nb = max(n_ok, 1)
-        if skipped:
-            print(f"  warning: skipped {skipped}/{steps_per_epoch} optimizer steps (non-finite loss or gradient)",
-                  flush=True)
-        if vram_free is not None and not spill_warned and torch.cuda.max_memory_reserved() > vram_free:
-            spill_warned = True
-            print(f"  warning: reserved GPU memory {torch.cuda.max_memory_reserved() / 2**30:.2f} GB exceeds the "
-                  f"{vram_free / 2**30:.2f} GB that were free; Windows spills the rest into shared memory "
-                  "(slow, possibly unstable). Use a smaller --batch with --accum.", flush=True)
-        if not bn_stats_finite(model):
-            raise SystemExit(f"BatchNorm statistics became non-finite in epoch {epoch}; stopping")
-        val_loss, ssim_org, pcc_org = validate(model, val_dl, device, amp_dtype, w)
-        score = float(np.nanmean(np.concatenate([ssim_org, pcc_org])))
-        row = [epoch, sched.get_last_lr()[-1], tot["loss"] / nb, tot["l1"] / nb, tot["ssim"] / nb, tot["pcc"] / nb, val_loss]
-        row += list(ssim_org) + list(pcc_org) + [score, skipped, time.time() - t0]
-        with open(log_path, "a", newline="") as fh:
-            csv.writer(fh).writerow(row)
-        plot_curves(log_path, out / "curves.png")
+        val_secs.append(summ["seconds"])
+        sel = summ["lmc_score"]
+        if select_on == "mean" and "mip" in summ.get("tasks", {}):
+            sel = (summ["lmc_score"] + summ["tasks"]["mip"]["lmc_score"]) / 2
+        summ["selection_score"] = sel
+        updated = sel > best
+        if updated:
+            best, best_step, best_epoch = sel, step, epoch
+            save_ckpt("best.pt")
+            summ.update(step=step, epoch=epoch, split="val", run=run_dir.name)
+            (run_dir / "val_metrics.json").write_text(json.dumps(summ, indent=1))
+            res.to_csv(run_dir / "val_per_image.csv", index=False)
+        row = {"epoch": epoch, "step": step, "lmc_score": summ["lmc_score"], "lmc_score_image": summ["lmc_score_image"],
+               "lmc_score_excl": summ.get("lmc_score_excl"),
+               **{f"att_err_planes_{o}": v["err_planes"] for o, v in summ.get("attention", {}).items()},
+               **{f"att_err_um_{o}": v["err_um"] for o, v in summ.get("attention", {}).items()},
+               "n_samples": summ["n_samples"], "seconds": summ["seconds"], "is_best": int(updated),
+               "best_lmc": best, "best_epoch": best_epoch}
+        for b in summ["breakdown"]["by_organelle"]:
+            row.update({f"ssim_{b['organelle']}": b["ssim"], f"pcc_{b['organelle']}": b["pcc"],
+                        f"score_{b['organelle']}": b["score"]})
+        for name, s in summ.get("tasks", {}).items():
+            row[f"lmc_score_{name}"] = s["lmc_score"]
+            if name == "mip":
+                row["lmc_score_mip_excl"] = s["lmc_score_excl"]
+                row.update({f"score_mip_{o}": v for o, v in s["per_organelle_study_macro"].items()})
+        append_csv(run_dir / "val_log.csv", VAL_FIELDS, row)
+        print_val_table(epoch, epochs, step, summ, best, best_epoch, updated)
+        runs.write_status(run_dir, status="running", step=step, epoch=epoch, epochs=epochs, best_step=best_step,
+                          best_epoch=best_epoch, best_val_lmc=best)
+        plot_curves(run_dir, spe)
 
-        ckpt = {"model": model.state_dict(), "args": vars(args), "epoch": epoch, "val_score": score}
-        torch.save(ckpt, out / "last.pt")
-        if score > best:
-            best = score
-            torch.save(ckpt, out / "best.pt")
-        per_org = "  ".join(f"{o[:4]} {s:.3f}/{p:.3f}" for o, s, p in zip(ORGANELLES, ssim_org, pcc_org))
-        mem = f", peak GPU {torch.cuda.max_memory_allocated() / 2**30:.1f} GB" if device.type == "cuda" else ""
-        print(f"epoch {epoch:3d}  train {tot['loss'] / nb:.4f}  val {val_loss:.4f}  score {score:.3f}  "
-              f"[SSIM/PCC {per_org}]  {time.time() - t0:.0f}s{mem}", flush=True)
-    print(f"best val score {best:.3f}; outputs in {out}")
+    # A stop exactly at the end of a validation epoch (or during its validation) leaves that validation
+    # undone: run it before continuing.
+    if args.resume and step % spe == 0 and step > 0:
+        done_ep = step // spe
+        logged = set()
+        if (run_dir / "val_log.csv").exists():
+            with open(run_dir / "val_log.csv", newline="") as fh:
+                logged = {int(r["epoch"]) for r in csv.DictReader(fh)}
+        if (done_ep % val_every == 0 or done_ep == epochs) and done_ep not in logged:
+            print(f"validation of epoch {done_ep} was not completed before the stop: running it now")
+            validate(done_ep)
+            save_ckpt("last.pt")
+
+    model.train()
+    recent = deque(maxlen=30)  # recent optimizer-step durations (median -> s/step and ETAs)
+    session_steps = 0  # the first steps after a (re)start include worker spawn / cuDNN tuning: not timed
+    t_run = time.time()
+    if device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats()
+    try:
+        for epoch in range(first_epoch, epochs + 1):
+            start_in_epoch = step % spe if epoch == first_epoch else 0
+            pbar = tqdm(total=spe, initial=start_in_epoch, desc=f"epoch {epoch:>2d}/{epochs}", file=sys.__stdout__,
+                        dynamic_ncols=True, ascii=" =", leave=True, mininterval=1.0,
+                        bar_format="{desc} |{bar:20}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}{postfix}]")
+            ep_loss, ep_n, t_ep = 0.0, 0, time.time()
+            acc = {"loss": 0.0, "l1": 0.0, "ssim": 0.0, "pcc": 0.0, "focus": 0.0, "n": 0, "wait": 0.0, "skipped": 0}
+            t_log = time.time()
+            for _ in range(start_in_epoch, spe):
+                t_step = time.time()
+                opt.zero_grad(set_to_none=True)
+                bad = False
+                for _ in range(t["accum"]):
+                    tw = time.time()
+                    b = next(it)
+                    acc["wait"] += time.time() - tw
+                    x, y, m = (b["x"].to(device, non_blocking=True), b["y"].to(device, non_blocking=True),
+                               b["m"].to(device))
+                    bn_backup = [b_.clone() for b_ in bn_bufs]
+                    with torch.autocast(device.type, dtype=torch.bfloat16, enabled=use_bf16):
+                        pred = model(x, b["zpos"].to(device), b["meta"].to(device))
+                    loss, parts, _, _ = masked_loss(pred, y, m, lw["w_l1"], lw["w_ssim"], lw["w_pcc"])
+                    total_loss = loss
+                    if lam > 0:  # E4: best_z used as a TRAINING signal only
+                        fl = focus_kl(model.aux["attn_mean"], b["bz"].to(device), m, sigma)
+                        total_loss = loss + lam * fl
+                        acc["focus"] += fl.item()
+                    if not torch.isfinite(total_loss):
+                        bad = True
+                        for b_, s_ in zip(bn_bufs, bn_backup):  # a non-finite forward also polluted BN statistics
+                            b_.copy_(s_)
+                        continue
+                    (total_loss / t["accum"]).backward()
+                    if sync_steps:  # S01 v2: bounds the GPU queue (laptop fault mitigation, train.sync_steps)
+                        torch.cuda.synchronize()
+                    acc["loss"] += loss.item()
+                    acc["n"] += 1
+                    for k_, v_ in parts.items():
+                        acc[k_] += v_
+                    ep_loss += loss.item()
+                    ep_n += 1
+                gnorm = torch.nn.utils.clip_grad_norm_(model.parameters(), t["clip"])
+                if bad or not torch.isfinite(gnorm):
+                    acc["skipped"] += 1  # never apply a non-finite gradient
+                else:
+                    opt.step()
+                    if ema is not None:
+                        ema.update_parameters(model)
+                sched.step()
+                step += 1
+                session_steps += 1
+                if session_steps > 2:
+                    recent.append(time.time() - t_step)
+                sps = float(np.median(recent)) if recent else None
+
+                # ETA for the whole run: remaining steps + remaining validations
+                n_val_left = len([e for e in range(epoch, epochs + 1) if e % val_every == 0 or e == epochs])
+                eta = hms((total - step) * sps + n_val_left * val_secs[-1]) if sps else "..."
+                pbar.set_postfix_str(f"loss {ep_loss / max(ep_n, 1):.4f}, lr {sched.get_last_lr()[0]:.2e}, "
+                                     f"{f'{sps:.2f}' if sps else '--'}s/step, run ETA {eta}", refresh=False)
+                pbar.update(1)
+
+                if step % t["log_every"] == 0 or step == total:
+                    n = max(acc["n"], 1)
+                    el = time.time() - t_log
+                    nsteps = t["log_every"] if step % t["log_every"] == 0 else step % t["log_every"]
+                    append_csv(run_dir / "train_log.csv", TRAIN_FIELDS, {
+                        "epoch": epoch, "step": step, "lr": sched.get_last_lr()[0], "loss": acc["loss"] / n,
+                        "l1": acc["l1"] / n, "ssim": acc["ssim"] / n, "pcc": acc["pcc"] / n,
+                        "focus": acc["focus"] / n if lam > 0 else "",
+                        "sec_per_step": el / max(nsteps, 1), "data_wait_frac": acc["wait"] / max(el, 1e-9),
+                        "gpu_peak_gb": torch.cuda.max_memory_allocated() / 2**30 if device.type == "cuda" else 0,
+                        "skipped": acc["skipped"]})
+                    acc = {"loss": 0.0, "l1": 0.0, "ssim": 0.0, "pcc": 0.0, "focus": 0.0, "n": 0, "wait": 0.0,
+                           "skipped": 0}
+                    t_log = time.time()
+
+                if args.stop_at and step >= args.stop_at and step < total:
+                    pbar.close()
+                    save_ckpt("last.pt")
+                    runs.write_status(run_dir, status="interrupted", step=step, epoch=epoch - 1, epochs=epochs,
+                                      best_step=best_step, best_epoch=best_epoch, best_val_lmc=best)
+                    print(f"--stop-at {args.stop_at}: stopped at step {step} (epoch {epoch}, step "
+                          f"{step - (epoch - 1) * spe}/{spe}); "
+                          f"resume with: python train.py --resume {runs.rel(run_dir)}")
+                    return
+            pbar.close()
+            peak = torch.cuda.max_memory_allocated() / 2**30 if device.type == "cuda" else 0
+            print(f"epoch {epoch:>2d}/{epochs}  loss {ep_loss / max(ep_n, 1):.4f}  lr {sched.get_last_lr()[0]:.2e}  "
+                  f"{(time.time() - t_ep) / max(spe - start_in_epoch, 1):.2f}s/step  epoch {hms(time.time() - t_ep)}  "
+                  f"peak GPU {peak:.2f}GB  run ETA {eta}",
+                  flush=True)
+            if epoch % val_every == 0 or epoch == epochs:
+                validate(epoch)
+            save_ckpt("last.pt")
+            runs.write_status(run_dir, status="running", step=step, epoch=epoch, epochs=epochs, best_step=best_step,
+                              best_epoch=best_epoch, best_val_lmc=best)
+    except KeyboardInterrupt:
+        save_ckpt("last.pt")
+        runs.write_status(run_dir, status="interrupted", step=step, epoch=step // spe, epochs=epochs,
+                          best_step=best_step, best_epoch=best_epoch, best_val_lmc=best)
+        print(f"\ninterrupted at step {step}; resume with: python train.py --resume {runs.rel(run_dir)}")
+        return
+    except Exception as e:
+        runs.write_status(run_dir, status="failed", step=step, error=repr(e))
+        raise
+    runs.write_status(run_dir, status="done", step=step, epoch=epochs, epochs=epochs, best_step=best_step,
+                      best_epoch=best_epoch, best_val_lmc=best)
+    plot_curves(run_dir, spe)
+    print(f"{bar}\nDONE  {run_dir.name}\n  total time    {hms(time.time() - t_start)} (this session; "
+          f"training+validation {hms(time.time() - t_run)})\n  best          Val LMC-score {best:.4f} at epoch "
+          f"{best_epoch} (step {best_step})\n  best.pt       {runs.rel(run_dir / 'best.pt')}\n  curves        "
+          f"{runs.rel(run_dir / 'curves.png')}\n{bar}", flush=True)
 
 
 if __name__ == "__main__":

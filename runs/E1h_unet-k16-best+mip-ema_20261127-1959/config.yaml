@@ -1,0 +1,64 @@
+run:
+  id: E1h
+  name: unet-k16-best+mip-ema
+  notes: ''
+data:
+  split: splits/split_v1.json
+  input: stack
+  k: 16
+  overfit_samples: null
+  tasks:
+  - best
+  - mip
+  in_channels: 16
+model:
+  backbone: unet
+  base: 32
+  depth: 4
+  encoder_weights: imagenet
+train:
+  epochs: 50
+  samples_per_epoch: null
+  batch: 4
+  accum: 2
+  patch: 512
+  lr: 0.001
+  wd: 0.0001
+  pct_start: 0.05
+  clip: 1.0
+  seed: 0
+  sampler: sqrt
+  augment: true
+  workers: 5
+  log_every: 10
+  val_every_epochs: 5
+  precision: bf16
+  cudnn_benchmark: false
+  ema_decay: 0.999
+  select_on: mean
+loss:
+  w_l1: 1.0
+  w_ssim: 0.5
+  w_pcc: 0.5
+eval:
+  tile: 512
+  overlap: 128
+  batch: 2
+  limit: null
+provenance:
+  config_hash: e77d0ff158c4
+  split_sha256: 50f72e7418677c6414ae1ebb9287899a919c1ca109e957a931291c3249798d33
+  code_sha256: 10085315143e
+  created: '2026-11-27T19:59:13'
+  command: train.py --config configs/E1h_unet_mip_ema.yaml
+  python: 3.13.5
+  torch: 2.8.0+cu128
+  gpu: NVIDIA GeForce RTX 3050 6GB Laptop GPU
+  paths:
+    dataset_root: E:\DeepLearningCompetition\Dataset
+    meta_dir: E:\DeepLearningCompetition\Dataset\meta\study_info\Study_info_filenames_and_optimal
+      focus
+    cache_root: E:\DeepLearningCompetition\cache\k16
+    train_cache_root: null
+    runs_root: E:\DeepLearningCompetition\S00_v2\runs
+  smoke: false

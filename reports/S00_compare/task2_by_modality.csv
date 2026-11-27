@@ -1,0 +1,11 @@
+organelle,tl,n,E1d T1->MIP,E1g,E1h
+Actin,BF,10,0.707,0.687,0.642
+Actin,PC,20,0.633,0.675,0.599
+Mitochondria,DIC,23,0.304,0.343,0.277
+Mitochondria,PC,15,0.572,0.64,0.622
+Nucleus,BF,10,0.897,0.832,0.741
+Nucleus,DIC,28,0.393,0.398,0.418
+Nucleus,PC,20,0.699,0.7,0.595
+Tubulin,BF,10,0.756,0.679,0.577
+Tubulin,DIC,28,0.309,0.385,0.395
+Tubulin,PC,15,0.599,0.641,0.561

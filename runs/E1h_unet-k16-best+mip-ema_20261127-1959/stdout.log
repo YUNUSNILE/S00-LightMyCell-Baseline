@@ -1,0 +1,168 @@
+
+==============================================================================
+START  runs/E1h_unet-k16-best+mip-ema_20261127-1959   (2026-11-27 19:59:16)
+==============================================================================
+  backbone      unet (7.77M params), bf16 autocast, cuda
+  input         stack, K=16 channel(s)
+  data          train 803 samples / 17 studies, val 58 samples / 5 studies
+  epochs        50 x 100 steps/epoch = 5000 steps (803 samples/epoch, batch 4 x accum 2, patch 512)
+  optimiser     AdamW lr 0.001 wd 0.0001, OneCycle over 5000 steps, clip 1.0
+  validation    every 5 epochs (500 steps) + at the end; best.pt on Val LMC-score
+==============================================================================
+epoch  1/50  loss 1.1565  lr 3.74e-04  0.90s/step  epoch 1m29s  peak GPU 2.19GB  run ETA 1h11m
+epoch  2/50  loss 0.8103  lr 9.11e-04  0.87s/step  epoch 1m26s  peak GPU 2.19GB  run ETA 1h10m
+epoch  3/50  loss 0.7003  lr 1.00e-03  0.87s/step  epoch 1m27s  peak GPU 2.19GB  run ETA 1h09m
+epoch  4/50  loss 0.6511  lr 9.98e-04  0.84s/step  epoch 1m23s  peak GPU 2.19GB  run ETA 1h08m
+epoch  5/50  loss 0.6316  lr 9.93e-04  0.92s/step  epoch 1m32s  peak GPU 2.19GB  run ETA 1h07m
+
+--- validation after epoch 5/50 (step 500) -- 58 images, 2m44s ---
+  organelle       SSIM     PCC  (S+P)/2   macro    n
+  Nucleus        0.292   0.134    0.213   0.188   58
+  Mitochondria   0.235  -0.049    0.093   0.086   38
+  Tubulin        0.381   0.143    0.262   0.270   53
+  Actin          0.338  -0.156    0.091   0.110   30
+  LMC-score 0.1637 (image-mean 0.1648; without S20 0.1571)   best 0.1906 @ epoch 5   best.pt UPDATED
+  [mip] LMC-score 0.2176 (without S20 0.2356)   Nucl 0.142  Mito 0.308  Tubu 0.286  Acti 0.134
+
+epoch  6/50  loss 0.6177  lr 9.87e-04  0.72s/step  epoch 1m11s  peak GPU 2.19GB  run ETA 1h07m
+epoch  7/50  loss 0.6130  lr 9.78e-04  0.76s/step  epoch 1m16s  peak GPU 2.19GB  run ETA 1h06m
+epoch  8/50  loss 0.6122  lr 9.67e-04  0.70s/step  epoch 1m09s  peak GPU 2.19GB  run ETA 1h06m
+epoch  9/50  loss 0.6057  lr 9.54e-04  0.75s/step  epoch 1m14s  peak GPU 2.19GB  run ETA 1h05m
+epoch 10/50  loss 0.6113  lr 9.40e-04  0.76s/step  epoch 1m15s  peak GPU 2.19GB  run ETA 1h04m
+
+--- validation after epoch 10/50 (step 1000) -- 58 images, 2m27s ---
+  organelle       SSIM     PCC  (S+P)/2   macro    n
+  Nucleus        0.212   0.107    0.159   0.151   58
+  Mitochondria   0.481   0.110    0.295   0.304   38
+  Tubulin        0.369   0.075    0.222   0.237   53
+  Actin          0.304  -0.131    0.086   0.096   30
+  LMC-score 0.1972 (image-mean 0.1909; without S20 0.2072)   best 0.2283 @ epoch 10   best.pt UPDATED
+  [mip] LMC-score 0.2594 (without S20 0.2678)   Nucl 0.212  Mito 0.274  Tubu 0.244  Acti 0.308
+
+epoch 11/50  loss 0.5879  lr 9.23e-04  0.80s/step  epoch 1m19s  peak GPU 2.19GB  run ETA 58m05s
+epoch 12/50  loss 0.5858  lr 9.04e-04  0.69s/step  epoch 1m09s  peak GPU 2.19GB  run ETA 57m14s
+epoch 13/50  loss 0.5893  lr 8.84e-04  0.72s/step  epoch 1m11s  peak GPU 2.19GB  run ETA 56m09s
+epoch 14/50  loss 0.5777  lr 8.62e-04  0.70s/step  epoch 1m10s  peak GPU 2.19GB  run ETA 55m12s
+epoch 15/50  loss 0.5737  lr 8.38e-04  0.77s/step  epoch 1m16s  peak GPU 2.19GB  run ETA 54m14s
+
+--- validation after epoch 15/50 (step 1500) -- 58 images, 2m32s ---
+  organelle       SSIM     PCC  (S+P)/2   macro    n
+  Nucleus        0.498   0.214    0.356   0.373   58
+  Mitochondria   0.423   0.153    0.288   0.300   38
+  Tubulin        0.383   0.180    0.281   0.308   53
+  Actin          0.497   0.152    0.325   0.333   30
+  LMC-score 0.3285 (image-mean 0.3126; without S20 0.3544)   best 0.3444 @ epoch 15   best.pt UPDATED
+  [mip] LMC-score 0.3603 (without S20 0.3841)   Nucl 0.377  Mito 0.322  Tubu 0.315  Acti 0.427
+
+epoch 16/50  loss 0.5663  lr 8.13e-04  0.74s/step  epoch 1m13s  peak GPU 2.19GB  run ETA 51m19s
+epoch 17/50  loss 0.5609  lr 7.87e-04  0.76s/step  epoch 1m15s  peak GPU 2.19GB  run ETA 50m21s
+epoch 18/50  loss 0.5615  lr 7.59e-04  0.70s/step  epoch 1m09s  peak GPU 2.19GB  run ETA 49m22s
+epoch 19/50  loss 0.5553  lr 7.30e-04  0.68s/step  epoch 1m08s  peak GPU 2.19GB  run ETA 48m26s
+epoch 20/50  loss 0.5522  lr 7.01e-04  0.69s/step  epoch 1m09s  peak GPU 2.19GB  run ETA 47m24s
+
+--- validation after epoch 20/50 (step 2000) -- 58 images, 2m35s ---
+  organelle       SSIM     PCC  (S+P)/2   macro    n
+  Nucleus        0.590   0.287    0.439   0.456   58
+  Mitochondria   0.521   0.233    0.377   0.393   38
+  Tubulin        0.409   0.272    0.341   0.364   53
+  Actin          0.559   0.391    0.475   0.462   30
+  LMC-score 0.4188 (image-mean 0.4078; without S20 0.4508)   best 0.4242 @ epoch 20   best.pt UPDATED
+  [mip] LMC-score 0.4296 (without S20 0.4580)   Nucl 0.433  Mito 0.391  Tubu 0.373  Acti 0.520
+
+epoch 21/50  loss 0.5502  lr 6.70e-04  0.72s/step  epoch 1m11s  peak GPU 2.19GB  run ETA 44m05s
+epoch 22/50  loss 0.5411  lr 6.38e-04  0.72s/step  epoch 1m12s  peak GPU 2.19GB  run ETA 43m07s
+epoch 23/50  loss 0.5525  lr 6.06e-04  0.74s/step  epoch 1m14s  peak GPU 2.19GB  run ETA 42m08s
+epoch 24/50  loss 0.5481  lr 5.74e-04  0.72s/step  epoch 1m11s  peak GPU 2.19GB  run ETA 41m10s
+epoch 25/50  loss 0.5267  lr 5.41e-04  0.71s/step  epoch 1m10s  peak GPU 2.19GB  run ETA 40m12s
+
+--- validation after epoch 25/50 (step 2500) -- 58 images, 2m40s ---
+  organelle       SSIM     PCC  (S+P)/2   macro    n
+  Nucleus        0.635   0.285    0.460   0.491   58
+  Mitochondria   0.521   0.281    0.401   0.426   38
+  Tubulin        0.417   0.332    0.374   0.403   53
+  Actin          0.628   0.493    0.560   0.533   30
+  LMC-score 0.4632 (image-mean 0.4490; without S20 0.5098)   best 0.4766 @ epoch 25   best.pt UPDATED
+  [mip] LMC-score 0.4899 (without S20 0.5386)   Nucl 0.523  Mito 0.453  Tubu 0.420  Acti 0.563
+
+epoch 26/50  loss 0.5315  lr 5.08e-04  0.72s/step  epoch 1m12s  peak GPU 2.19GB  run ETA 36m59s
+epoch 27/50  loss 0.5287  lr 4.75e-04  0.79s/step  epoch 1m18s  peak GPU 2.19GB  run ETA 36m00s
+epoch 28/50  loss 0.5251  lr 4.42e-04  0.73s/step  epoch 1m12s  peak GPU 2.19GB  run ETA 35m04s
+epoch 29/50  loss 0.5325  lr 4.09e-04  0.69s/step  epoch 1m09s  peak GPU 2.19GB  run ETA 34m03s
+epoch 30/50  loss 0.5345  lr 3.77e-04  0.71s/step  epoch 1m11s  peak GPU 2.19GB  run ETA 33m05s
+
+--- validation after epoch 30/50 (step 3000) -- 58 images, 2m37s ---
+  organelle       SSIM     PCC  (S+P)/2   macro    n
+  Nucleus        0.587   0.288    0.438   0.502   58
+  Mitochondria   0.481   0.308    0.394   0.426   38
+  Tubulin        0.422   0.369    0.395   0.429   53
+  Actin          0.651   0.551    0.601   0.564   30
+  LMC-score 0.4802 (image-mean 0.4570; without S20 0.5426)   best 0.4965 @ epoch 30   best.pt UPDATED
+  [mip] LMC-score 0.5128 (without S20 0.5712)   Nucl 0.545  Mito 0.481  Tubu 0.448  Acti 0.577
+
+epoch 31/50  loss 0.5255  lr 3.45e-04  0.70s/step  epoch 1m09s  peak GPU 2.19GB  run ETA 29m13s
+epoch 32/50  loss 0.5089  lr 3.14e-04  0.68s/step  epoch 1m08s  peak GPU 2.19GB  run ETA 28m17s
+epoch 33/50  loss 0.5032  lr 2.84e-04  0.69s/step  epoch 1m08s  peak GPU 2.19GB  run ETA 27m17s
+epoch 34/50  loss 0.5102  lr 2.55e-04  0.67s/step  epoch 1m07s  peak GPU 2.19GB  run ETA 26m18s
+epoch 35/50  loss 0.5126  lr 2.26e-04  0.69s/step  epoch 1m08s  peak GPU 2.19GB  run ETA 25m18s
+
+--- validation after epoch 35/50 (step 3500) -- 58 images, 2m40s ---
+  organelle       SSIM     PCC  (S+P)/2   macro    n
+  Nucleus        0.565   0.307    0.436   0.517   58
+  Mitochondria   0.463   0.323    0.393   0.429   38
+  Tubulin        0.419   0.397    0.408   0.449   53
+  Actin          0.638   0.571    0.604   0.568   30
+  LMC-score 0.4909 (image-mean 0.4604; without S20 0.5630)   best 0.5077 @ epoch 35   best.pt UPDATED
+  [mip] LMC-score 0.5244 (without S20 0.5878)   Nucl 0.562  Mito 0.483  Tubu 0.476  Acti 0.577
+
+epoch 36/50  loss 0.5162  lr 1.99e-04  0.72s/step  epoch 1m11s  peak GPU 2.19GB  run ETA 21m46s
+epoch 37/50  loss 0.5018  lr 1.73e-04  0.84s/step  epoch 1m23s  peak GPU 2.19GB  run ETA 20m47s
+epoch 38/50  loss 0.5029  lr 1.49e-04  0.71s/step  epoch 1m11s  peak GPU 2.19GB  run ETA 19m49s
+epoch 39/50  loss 0.4953  lr 1.26e-04  0.77s/step  epoch 1m17s  peak GPU 2.19GB  run ETA 18m50s
+epoch 40/50  loss 0.5087  lr 1.05e-04  0.72s/step  epoch 1m12s  peak GPU 2.19GB  run ETA 17m51s
+
+--- validation after epoch 40/50 (step 4000) -- 58 images, 2m30s ---
+  organelle       SSIM     PCC  (S+P)/2   macro    n
+  Nucleus        0.565   0.325    0.445   0.537   58
+  Mitochondria   0.457   0.324    0.390   0.425   38
+  Tubulin        0.427   0.412    0.420   0.468   53
+  Actin          0.625   0.582    0.603   0.569   30
+  LMC-score 0.4999 (image-mean 0.4647; without S20 0.5755)   best 0.5159 @ epoch 40   best.pt UPDATED
+  [mip] LMC-score 0.5319 (without S20 0.5987)   Nucl 0.580  Mito 0.470  Tubu 0.499  Acti 0.578
+
+epoch 41/50  loss 0.4964  lr 8.58e-05  0.76s/step  epoch 1m16s  peak GPU 2.19GB  run ETA 13m53s
+epoch 42/50  loss 0.4947  lr 6.82e-05  0.85s/step  epoch 1m24s  peak GPU 2.19GB  run ETA 12m52s
+epoch 43/50  loss 0.4973  lr 5.25e-05  0.75s/step  epoch 1m15s  peak GPU 2.19GB  run ETA 11m54s
+epoch 44/50  loss 0.4904  lr 3.87e-05  0.75s/step  epoch 1m15s  peak GPU 2.19GB  run ETA 10m56s
+epoch 45/50  loss 0.4984  lr 2.70e-05  0.67s/step  epoch 1m06s  peak GPU 2.19GB  run ETA 9m56s
+
+--- validation after epoch 45/50 (step 4500) -- 58 images, 2m26s ---
+  organelle       SSIM     PCC  (S+P)/2   macro    n
+  Nucleus        0.569   0.340    0.455   0.551   58
+  Mitochondria   0.461   0.319    0.390   0.424   38
+  Tubulin        0.435   0.423    0.429   0.483   53
+  Actin          0.619   0.595    0.607   0.574   30
+  LMC-score 0.5082 (image-mean 0.4702; without S20 0.5862)   best 0.5228 @ epoch 45   best.pt UPDATED
+  [mip] LMC-score 0.5374 (without S20 0.6072)   Nucl 0.591  Mito 0.459  Tubu 0.515  Acti 0.585
+
+epoch 46/50  loss 0.5087  lr 1.73e-05  0.77s/step  epoch 1m17s  peak GPU 2.19GB  run ETA 6m22s
+epoch 47/50  loss 0.4892  lr 9.75e-06  0.77s/step  epoch 1m16s  peak GPU 2.19GB  run ETA 5m23s
+epoch 48/50  loss 0.4934  lr 4.33e-06  0.69s/step  epoch 1m09s  peak GPU 2.19GB  run ETA 4m24s
+epoch 49/50  loss 0.4895  lr 1.08e-06  0.78s/step  epoch 1m17s  peak GPU 2.19GB  run ETA 3m25s
+epoch 50/50  loss 0.4879  lr 4.11e-09  0.76s/step  epoch 1m15s  peak GPU 2.19GB  run ETA 2m26s
+
+--- validation after epoch 50/50 (step 5000) -- 58 images, 2m26s ---
+  organelle       SSIM     PCC  (S+P)/2   macro    n
+  Nucleus        0.573   0.356    0.465   0.563   58
+  Mitochondria   0.465   0.314    0.390   0.424   38
+  Tubulin        0.442   0.427    0.434   0.492   53
+  Actin          0.611   0.604    0.608   0.576   30
+  LMC-score 0.5138 (image-mean 0.4741; without S20 0.5938)   best 0.5272 @ epoch 50   best.pt UPDATED
+  [mip] LMC-score 0.5405 (without S20 0.6117)   Nucl 0.600  Mito 0.449  Tubu 0.523  Acti 0.591
+
+==============================================================================
+DONE  E1h_unet-k16-best+mip-ema_20261127-1959
+  total time    1h35m (this session; training+validation 1h34m)
+  best          Val LMC-score 0.5272 at epoch 50 (step 5000)
+  best.pt       runs/E1h_unet-k16-best+mip-ema_20261127-1959/best.pt
+  curves        runs/E1h_unet-k16-best+mip-ema_20261127-1959/curves.png
+==============================================================================
